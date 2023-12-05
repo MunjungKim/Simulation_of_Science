@@ -1,0 +1,1 @@
+Implementation of the simulation in [Against theory-motivated experimentation in science](https://warwick.ac.uk/fac/soc/wbs/subjects/bsci/research/laboratory/lab_meetings/dubovaetal2021_random_experimentation.pdf)
