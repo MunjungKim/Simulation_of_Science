@@ -97,12 +97,79 @@ class scientist:
         self.batch_size = 16
         
     def make_observation(self, env, scientist2=None):
+        
         # env = system
         generator = DataGen(env)
         
         # what to measure if there is no data yet
-        if len(self.data['Image']) < 10 or np.random.random() < self.minimum_exploration or self.experimentation_strategy == "random": # exploration here!
-            current_observation = generator.run( 1)
+        if len(self.data['Image']) < 100 or np.random.random() < self.minimum_exploration or self.experimentation_strategy == "random": # exploration here!
+            preferred_state = np.random.randint(0, 2, self.max_dimensions)
+            env.set_initial_state(preferred_state)
+            current_observation = generator.run( total_size = 1)
+            self.data["Image"].extend(current_observation["Image"])
+            self.data["Label"].extend(current_observation["Label"])
+            
+            
+        elif self.experimentation_strategy == "safe": # exploring the safe area
+            
+            
+            
+            test_accuracy = np.array(self.evaluate_on_collected_data())
+            target_observation_idx = np.argmax(test_accuracy)
+
+            
+            best_explained_data = self.data["Image"][target_observation_idx]
+            
+            
+            
+            
+            random_change = np.random.randint(0,196,1)
+         
+            
+            if best_explained_data[random_change][0][2] ==1:
+                best_explained_data[random_change][0][2] = 0
+                
+            elif best_explained_data[random_change][0][2]==0:
+                best_explained_data[random_change][0][2] = 1
+                
+        
+                
+            preferred_state = best_explained_data[:,2]
+    
+
+            env.set_initial_state(preferred_state)
+            current_observation = generator.run( total_size = 1)
+            self.data["Image"].extend(current_observation["Image"])
+            self.data["Label"].extend(current_observation["Label"])
+            
+            
+        elif self.experimentation_strategy == "risky": # exploring the safe area
+            
+            test_accuracy = np.array(self.evaluate_on_collected_data())
+            target_observation_idx = np.argmin(test_accuracy)
+
+            
+            best_explained_data = self.data["Image"][target_observation_idx]
+            
+            
+            
+            
+            random_change = np.random.randint(0,196,1)
+         
+            
+            if best_explained_data[random_change][0][2] ==1:
+                best_explained_data[random_change][0][2] = 0
+                
+            elif best_explained_data[random_change][0][2]==0:
+                best_explained_data[random_change][0][2] = 1
+                
+        
+                
+            preferred_state = best_explained_data[:,2]
+    
+
+            env.set_initial_state(preferred_state)
+            current_observation = generator.run( total_size = 1)
             self.data["Image"].extend(current_observation["Image"])
             self.data["Label"].extend(current_observation["Label"])
             
@@ -165,13 +232,16 @@ class scientist:
 
 
     def evaluate_on_collected_data(self):
-        train_sampler = torch.utils.data.DistributedSampler(data)
-        train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, pin_memory=True,
-                            num_workers=args.workers)
+        train_dataset = CustomDataset(self.data)
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False, pin_memory=True,
+                            num_workers=10)
         
         criterion = nn.BCEWithLogitsLoss()
         
-        train_loss, train_acc = test(train_loader, self.explanation, criterion)
+        train_loss, train_acc = self.test(train_loader, self.explanation, criterion)
+        
+        
+        
         return train_acc
     
     
@@ -205,5 +275,29 @@ class scientist:
 
         scheduler.step(train_losses.avg, epoch)
         return train_losses.avg, train_acc.avg
+    
+    
+    def test(self,test_loader, model, criterion):
+
+        test_losses = []
+        test_acc = []
+        model.eval()
+
+        with torch.no_grad():
+            for data, labels in test_loader:
+                data = data.cuda(self.local_rank)
+                labels = labels.cuda(self.local_rank).squeeze()
+                output = model(data).squeeze(-1)
+                output = output.reshape(-1, 14, 14)[:, 1:-1, 1:-1].reshape(-1, 144)
+                labels = labels.reshape(-1, 14, 14)[:, 1:-1, 1:-1].reshape(-1, 144) # cutting out the corners
+                test_loss = criterion(output, labels) # reduction = sum
+                test_losses.append(test_loss)
+
+                x = DCN(torch.sigmoid(output))
+                x = np.where(x>=0.5, 1, 0)
+                answer_ratio = np.mean(np.where(x==DCN(labels), 1, 0))
+                test_acc.append(answer_ratio)
+
+        return test_losses, test_acc
     
     

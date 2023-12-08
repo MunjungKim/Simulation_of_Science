@@ -55,6 +55,7 @@ class CA():
         self.name = 'CA'
         self.rule_name = 'Agent_'+str(self.name)
         self.state_num = 3 # x, y, c (cell state)
+        self.preferred_state  = None
 
     def assign_pp(self, plugin_parameters):
         self.pp = plugin_parameters
@@ -78,10 +79,17 @@ class CA():
         neighbor = np.ravel_multi_index((neigh_idx, neigh_idy), mode = 'warp', dims=(M,N)).T
         return np.concatenate((neighbor, np.expand_dims(np.arange(size), 1)), axis = 1)
 
+    def set_initial_state(self,preferred_state):
+        self.preferred_state = preferred_state
+    
+    
     def __next__(self):
         L = self.side_length
         while(True):
-            system = np.random.randint(0, 2, L**2)
+            # if sampling_strategy == 'random':
+            #     system = np.random.randint(0, 2, L**2)
+            # elif sampling_strategy = "safe":
+            system = self.preferred_state
      
             system_now = deepcopy(system)
             answer = []
@@ -162,8 +170,10 @@ class DataGen():
 
         train_image = []
         train_label = []
+
         
         for i in range(total_size):
+            
             data, answer = next(self.system)
             
             train_image.append(data.astype(float))
